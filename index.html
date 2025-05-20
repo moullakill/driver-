@@ -131,7 +131,7 @@
       const folderContent = document.getElementById('folderContent');
       folderContent.innerHTML = `<p>Chargement des fichiers de ${folderName}...</p>`;
       try {
-        const res = await fetch(`https://api.github.com/repos/moullakill/driver-/contents/folder/${encodeURIComponent(folderName)}`);
+        const res = await fetch(`https://api.github.com/repos/moullakill/driver-/contents/folder/${folderName}`);
         if (!res.ok) throw new Error('Erreur HTTP');
         const files = await res.json();
         if (!Array.isArray(files)) throw new Error('Pas un dossier');
@@ -141,8 +141,6 @@
         folderContent.innerHTML = `<p class="error">\u274C Impossible de charger les fichiers du dossier : ${folderName}</p>`;
       }
     }
-
-    // Reste du script identique...
 
     async function checkCode() {
       const inputCode = document.getElementById('accessCode').value.trim();
@@ -193,7 +191,7 @@
         const content = reader.result.split(',')[1];
         const filePath = `folder/${currentFolder}/${file.name}`;
 
-       const res = await fetch(`https://api.github.com/repos/moullakill/driver-/contents/folder/${folderName}`);
+        const response = await fetch(`https://api.github.com/repos/moullakill/driver-/contents/${filePath}`, {
           method: 'PUT',
           headers: {
             'Authorization': 'Bearer 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',
@@ -216,7 +214,6 @@
       reader.readAsDataURL(file);
     }
 
-    // Affiche les dossiers publics au chargement
     getPublicFolders();
   </script>
 </body>
