@@ -1,3 +1,8 @@
+/**
+ * Note de sécurité : vous avez explicitement demandé l'intégration d'un token GitHub dans le code HTML public.
+ * Cela expose votre dépôt à des risques si ce code est partagé ou mis en ligne sans protection.
+ */
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -87,17 +92,48 @@
       <button onclick="uploadFile()">Uploader</button>
       <div id="uploadStatus"></div>
     </div>
+    <div id="folderContent" style="margin-top: 2rem;"></div>
   </div>
 
   <div class="container folder-list">
     <h2>Dossiers publics</h2>
-    <ul>
-      <li><a href="https://github.com/moullakill/driver-/tree/main/folder/folder%201" target="_blank">folder 1</a></li>
-    </ul>
+    <ul id="publicFolders"></ul>
   </div>
 
   <script>
     let currentFolder = null;
+
+    async function getPublicFolders() {
+      const res = await fetch('https://raw.githubusercontent.com/moullakill/driver-/main/permissive.txt');
+      const text = await res.text();
+      const lines = text.split('\n');
+      const folders = [];
+      let current = '';
+
+      for (const line of lines) {
+        if (line.includes('folder')) {
+          current = line.split(':')[0].trim();
+        } else if (line.toLowerCase().includes('open')) {
+          folders.push(current);
+        }
+      }
+
+      const ul = document.getElementById('publicFolders');
+      for (const f of folders) {
+        const li = document.createElement('li');
+        li.innerHTML = `<a href="#" onclick="loadFolder('${f}')">${f}</a>`;
+        ul.appendChild(li);
+      }
+    }
+
+    async function loadFolder(folderName) {
+      const folderContent = document.getElementById('folderContent');
+      folderContent.innerHTML = `<p>Chargement des fichiers de ${folderName}...</p>`;
+      const res = await fetch(`https://api.github.com/repos/moullakill/driver-/contents/folder/${folderName}`);
+      const files = await res.json();
+      folderContent.innerHTML = `<h3>Contenu de ${folderName} :</h3><ul>` +
+        files.map(file => `<li><a href="${file.download_url}" target="_blank">${file.name}</a></li>`).join('') + '</ul>';
+    }
 
     async function checkCode() {
       const inputCode = document.getElementById('accessCode').value.trim();
@@ -130,10 +166,10 @@
 
       if (found) {
         currentFolder = found;
-        const link = `https://github.com/moullakill/driver-/tree/main/folder/${found.replace(' ', '%20')}`;
-        resultDiv.innerHTML = `<p class="success">\u2705 Code valide ! Accès autorisé au dossier <b>${found}</b>.</p><p><a href="${link}" target="_blank">Voir le dossier sur GitHub \u2192</a></p>`;
+        resultDiv.innerHTML = `<p class="success">\u2705 Code valide ! Accès autorisé au dossier <b>${found}</b>.</p>`;
         document.getElementById('uploadSection').style.display = 'block';
         document.getElementById('uploadFolder').textContent = found;
+        loadFolder(found);
       } else {
         resultDiv.innerHTML = '<p class="error">\u274C Code invalide. Veuillez réessayer.</p>';
       }
@@ -151,7 +187,7 @@
         const response = await fetch(`https://api.github.com/repos/moullakill/driver-/contents/${filePath}`, {
           method: 'PUT',
           headers: {
-            'Authorization': 'Bearer VOTRE_TOKEN_GITHUB',
+            'Authorization': 'Bearer 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',
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
@@ -163,12 +199,16 @@
         const status = document.getElementById('uploadStatus');
         if (response.ok) {
           status.innerHTML = '<p class="success">\u2705 Fichier uploadé avec succès !</p>';
+          loadFolder(currentFolder);
         } else {
           status.innerHTML = '<p class="error">\u274C Erreur lors de l\'upload.</p>';
         }
       }
       reader.readAsDataURL(file);
     }
+
+    // Affiche les dossiers publics au chargement
+    getPublicFolders();
   </script>
 </body>
 </html>
