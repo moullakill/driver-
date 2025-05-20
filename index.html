@@ -111,9 +111,10 @@
       let current = '';
 
       for (const line of lines) {
-        if (line.includes('folder')) {
-          current = line.split(':')[0].trim();
-        } else if (line.toLowerCase().includes('open')) {
+        if (line.startsWith('folder')) {
+          const parts = line.split(':');
+          current = parts[0].trim();
+        } else if (line.toLowerCase().includes('secure') && line.toLowerCase().includes('open')) {
           folders.push(current);
         }
       }
@@ -129,11 +130,19 @@
     async function loadFolder(folderName) {
       const folderContent = document.getElementById('folderContent');
       folderContent.innerHTML = `<p>Chargement des fichiers de ${folderName}...</p>`;
-      const res = await fetch(`https://api.github.com/repos/moullakill/driver-/contents/folder/${folderName}`);
-      const files = await res.json();
-      folderContent.innerHTML = `<h3>Contenu de ${folderName} :</h3><ul>` +
-        files.map(file => `<li><a href="${file.download_url}" target="_blank">${file.name}</a></li>`).join('') + '</ul>';
+      try {
+        const res = await fetch(`https://api.github.com/repos/moullakill/driver-/contents/folder/${encodeURIComponent(folderName)}`);
+        if (!res.ok) throw new Error('Erreur HTTP');
+        const files = await res.json();
+        if (!Array.isArray(files)) throw new Error('Pas un dossier');
+        folderContent.innerHTML = `<h3>Contenu de ${folderName} :</h3><ul>` +
+          files.map(file => `<li><a href="${file.download_url}" target="_blank">${file.name}</a></li>`).join('') + '</ul>';
+      } catch (err) {
+        folderContent.innerHTML = `<p class="error">\u274C Impossible de charger les fichiers du dossier : ${folderName}</p>`;
+      }
     }
+
+    // Reste du script identique...
 
     async function checkCode() {
       const inputCode = document.getElementById('accessCode').value.trim();
