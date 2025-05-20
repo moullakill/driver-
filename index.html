@@ -193,7 +193,7 @@
         const content = reader.result.split(',')[1];
         const filePath = `folder/${currentFolder}/${file.name}`;
 
-        const response = await fetch(`https://api.github.com/repos/moullakill/driver-/contents/${filePath}`, {
+       const res = await fetch(`https://api.github.com/repos/moullakill/driver-/contents/folder/${folderName}`);
           method: 'PUT',
           headers: {
             'Authorization': 'Bearer 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',
