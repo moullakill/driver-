@@ -100,6 +100,19 @@
       reader.onload = async () => {
         const content = reader.result.split(',')[1];
         const url = `${apiBase}/contents/${path}`;
+
+        // Check if the file already exists
+        const checkRes = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        let sha = null;
+        if (checkRes.ok) {
+          const existing = await checkRes.json();
+          sha = existing.sha;
+        }
+
         const response = await fetch(url, {
           method: 'PUT',
           headers: {
@@ -107,12 +120,17 @@
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            message: `Ajout de ${file.name}`,
-            content: content
+            message: `Ajout ou mise à jour de ${file.name}`,
+            content: content,
+            sha: sha
           })
         });
+
         if (response.ok) alert('Fichier uploadé avec succès');
-        else alert("Erreur lors de l'upload");
+        else {
+          const err = await response.json();
+          alert("Erreur lors de l'upload : " + err.message);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -131,18 +149,6 @@
         const fileList = document.createElement('div');
         fileList.className = 'file-list';
 
-        const showFiles = async () => {
-          const files = await fetchFiles(folder);
-          fileList.innerHTML = '';
-          files.forEach(f => {
-            const a = document.createElement('a');
-            a.href = f.download_url;
-            a.textContent = f.name;
-            a.setAttribute('download', f.name);
-            fileList.appendChild(a);
-          });
-        };
-
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         const uploadBtn = document.createElement('button');
@@ -155,6 +161,20 @@
         const confirmBtn = document.createElement('button');
         confirmBtn.textContent = 'Valider';
 
+        const showFiles = async () => {
+          const files = await fetchFiles(folder);
+          fileList.innerHTML = '';
+          files.forEach(f => {
+            const a = document.createElement('a');
+            a.href = f.download_url;
+            a.textContent = f.name;
+            a.setAttribute('download', f.name);
+            a.setAttribute('target', '_blank');
+            a.setAttribute('rel', 'noopener noreferrer');
+            fileList.appendChild(a);
+          });
+        };
+
         const allowOpen = info.secure === 'open';
 
         if (allowOpen) {
@@ -165,8 +185,7 @@
           };
           div.append(fileList, fileInput, uploadBtn);
         } else {
-          div.appendChild(codeInput);
-          div.appendChild(confirmBtn);
+          div.append(codeInput, confirmBtn);
           confirmBtn.onclick = async () => {
             if (info.codes.includes(codeInput.value.trim())) {
               await showFiles();
