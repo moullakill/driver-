@@ -4,11 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portail Driver Sécurisé</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <style>
     body {
-      font-family: 'Inter', sans-serif;
-      background: #f0f4f8;
+      font-family: Arial, sans-serif;
+      background: #eef1f4;
       margin: 0;
       padding: 2rem;
     }
@@ -17,40 +16,39 @@
       margin: auto;
       background: white;
       padding: 2rem;
-      border-radius: 1rem;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      border-radius: 0.5rem;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    h1 { text-align: center; color: #1f2937; }
+    h1 {
+      text-align: center;
+    }
     .folder {
-      border: 1px solid #e5e7eb;
-      border-radius: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
       padding: 1rem;
       margin-bottom: 1.5rem;
     }
-    .folder h3 { margin: 0.5rem 0; }
     .file-list a {
-      display: inline-block;
+      display: block;
       margin: 0.2rem 0;
       color: #2563eb;
       text-decoration: none;
     }
     input[type="text"], input[type="file"] {
-      width: 60%;
       padding: 0.5rem;
       margin-top: 0.5rem;
+      margin-right: 0.5rem;
+      border-radius: 4px;
       border: 1px solid #ccc;
-      border-radius: 0.5rem;
     }
     button {
-      margin-left: 0.5rem;
       padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 0.5rem;
-      background: #3b82f6;
+      background: #2563eb;
       color: white;
+      border: none;
+      border-radius: 4px;
       cursor: pointer;
     }
-    .hidden { display: none; }
   </style>
 </head>
 <body>
@@ -60,139 +58,130 @@
   </div>
 
   <script>
-    const githubToken = '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';
+    const token = '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';
     const repo = 'moullakill/driver-';
+    const apiBase = `https://api.github.com/repos/${repo}`;
 
-    async function loadPermissions() {
-      const res = await fetch(`https://raw.githubusercontent.com/${repo}/main/permissive.txt`);
-      const text = await res.text();
-      const lines = text.split('\n');
-
-      const folders = {};
+    async function fetchPermissive() {
+      const txt = await fetch(`https://raw.githubusercontent.com/${repo}/main/permissive.txt`).then(r => r.text());
+      const lines = txt.split('\n');
+      const data = {};
       let current = null;
 
       lines.forEach(line => {
         line = line.trim();
         if (line.startsWith('folder')) {
           const name = line.split(':')[0].trim();
-          const url = line.split(':')[1].trim();
-          current = name;
-          folders[current] = { url, secure: 'open', codes: [] };
+          const path = line.match(/folder\s+\d+/i)?.[0] || name;
+          data[path] = { name: path, secure: 'open', codes: [], url: '' };
+          current = path;
         } else if (line.startsWith('secure')) {
-          folders[current].secure = line.split(':')[1].trim();
+          data[current].secure = line.split(':')[1].trim();
         } else if (line.startsWith('code')) {
           // skip
-        } else if (line && current && folders[current].secure !== 'open') {
-          folders[current].codes.push(line);
+        } else if (line && current) {
+          if (data[current].secure !== 'open') {
+            data[current].codes.push(line);
+          }
         }
       });
-
-      return folders;
+      return data;
     }
 
-    async function listFiles(folder) {
-      const res = await fetch(`https://api.github.com/repos/${repo}/contents/folder/${encodeURIComponent(folder)}`);
-      if (!res.ok) return [];
-      return await res.json();
+    async function fetchFiles(folderName) {
+      const url = `${apiBase}/contents/folder/${encodeURIComponent(folderName)}`;
+      const res = await fetch(url);
+      return res.ok ? await res.json() : [];
+    }
+
+    async function uploadFile(folder, file) {
+      const path = `folder/${folder}/${file.name}`;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const content = reader.result.split(',')[1];
+        const url = `${apiBase}/contents/${path}`;
+        const response = await fetch(url, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: `Ajout de ${file.name}`,
+            content: content
+          })
+        });
+        if (response.ok) alert('Fichier uploadé avec succès');
+        else alert("Erreur lors de l'upload");
+      };
+      reader.readAsDataURL(file);
     }
 
     async function init() {
+      const perms = await fetchPermissive();
       const container = document.getElementById('folders');
-      const perms = await loadPermissions();
 
-      for (const [name, info] of Object.entries(perms)) {
+      for (const [folder, info] of Object.entries(perms)) {
         const div = document.createElement('div');
         div.className = 'folder';
-        div.innerHTML = `<h3>${name}</h3><p>Sécurité : <b>${info.secure}</b></p>`;
+        const title = document.createElement('h3');
+        title.textContent = `${folder} (sécurité: ${info.secure})`;
+        div.appendChild(title);
 
-        const fileDiv = document.createElement('div');
-        fileDiv.className = 'file-list';
+        const fileList = document.createElement('div');
+        fileList.className = 'file-list';
 
-        const codeInput = document.createElement('input');
-        codeInput.placeholder = 'Code d\'accès';
-        codeInput.className = 'hidden';
+        const showFiles = async () => {
+          const files = await fetchFiles(folder);
+          fileList.innerHTML = '';
+          files.forEach(f => {
+            const a = document.createElement('a');
+            a.href = f.download_url;
+            a.textContent = f.name;
+            a.setAttribute('download', f.name);
+            fileList.appendChild(a);
+          });
+        };
 
-        const codeBtn = document.createElement('button');
-        codeBtn.textContent = 'Valider';
-        codeBtn.className = 'hidden';
-
-        const uploadInput = document.createElement('input');
-        uploadInput.type = 'file';
-        uploadInput.className = 'hidden';
-
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
         const uploadBtn = document.createElement('button');
         uploadBtn.textContent = 'Uploader';
-        uploadBtn.className = 'hidden';
 
-        const allowView = info.secure === 'open';
+        const codeInput = document.createElement('input');
+        codeInput.type = 'text';
+        codeInput.placeholder = 'Code d\'accès';
 
-        if (allowView) {
-          const files = await listFiles(name);
-          files.forEach(f => {
-            const link = document.createElement('a');
-            link.href = f.download_url;
-            link.textContent = f.name;
-            link.download = f.name;
-            fileDiv.appendChild(link);
-            fileDiv.appendChild(document.createElement('br'));
-          });
-          uploadInput.classList.remove('hidden');
-          uploadBtn.classList.remove('hidden');
+        const confirmBtn = document.createElement('button');
+        confirmBtn.textContent = 'Valider';
+
+        const allowOpen = info.secure === 'open';
+
+        if (allowOpen) {
+          await showFiles();
+          uploadBtn.onclick = () => {
+            const file = fileInput.files[0];
+            if (file) uploadFile(folder, file);
+          };
+          div.append(fileList, fileInput, uploadBtn);
         } else {
-          codeInput.classList.remove('hidden');
-          codeBtn.classList.remove('hidden');
-
-          codeBtn.onclick = async () => {
-            const code = codeInput.value.trim();
-            if (info.codes.includes(code)) {
-              const files = await listFiles(name);
-              fileDiv.innerHTML = '';
-              files.forEach(f => {
-                const link = document.createElement('a');
-                link.href = f.download_url;
-                link.textContent = f.name;
-                link.download = f.name;
-                fileDiv.appendChild(link);
-                fileDiv.appendChild(document.createElement('br'));
-              });
-              uploadInput.classList.remove('hidden');
-              uploadBtn.classList.remove('hidden');
-              codeInput.classList.add('hidden');
-              codeBtn.classList.add('hidden');
+          div.appendChild(codeInput);
+          div.appendChild(confirmBtn);
+          confirmBtn.onclick = async () => {
+            if (info.codes.includes(codeInput.value.trim())) {
+              await showFiles();
+              uploadBtn.onclick = () => {
+                const file = fileInput.files[0];
+                if (file) uploadFile(folder, file);
+              };
+              div.append(fileList, fileInput, uploadBtn);
+              codeInput.remove();
+              confirmBtn.remove();
             } else {
-              alert('Code invalide.');
+              alert('Code incorrect');
             }
           };
         }
-
-        uploadBtn.onclick = async () => {
-          const file = uploadInput.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const base64 = reader.result.split(',')[1];
-            const path = `folder/${name}/${file.name}`;
-            await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
-              method: 'PUT',
-              headers: {
-                'Authorization': 'Bearer ' + githubToken,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                message: `upload: ${file.name}`,
-                content: base64
-              })
-            });
-            alert('Fichier uploadé avec succès.');
-          };
-          reader.readAsDataURL(file);
-        };
-
-        div.appendChild(fileDiv);
-        div.appendChild(codeInput);
-        div.appendChild(codeBtn);
-        div.appendChild(uploadInput);
-        div.appendChild(uploadBtn);
         container.appendChild(div);
       }
     }
